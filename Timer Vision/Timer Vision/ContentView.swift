@@ -32,7 +32,7 @@ struct ContentView: View {
                         .frame(width: 200)
                         .padding()
                     
-                    Button("Start Timer") {
+                    Button("Start bigger Timer") {
                         if let seconds = Int(inputSeconds) {
                             timerViewModel.startTimer(duration: seconds)
                         }
