@@ -2,14 +2,148 @@
 //  MorphingShapeView.swift
 //  Timer Vision
 //
+//  3D Morphing RealityKit Polyhedron — a real 3D ModelEntity (rounded box) that
+//  steps through 5 shape stages as time elapses, spinning continuously on Y axis,
+//  and shifting color blue → teal → green → orange → red → gray (finished).
+//
+//  MorphingTimerShape is retained below as a 2D Shape fallback (unused by the view).
+//
 
 import SwiftUI
+import RealityKit
 
-// Bezier circle approximation constant: 4*(sqrt(2)-1)/3
+// MARK: - Morph Stage
+
+private enum MorphStage: Equatable {
+    case spherelike
+    case roundedHeavy
+    case roundedMedium
+    case roundedLight
+    case cubelike
+    case finished
+
+    static func from(progress: Double, hasFinished: Bool) -> MorphStage {
+        if hasFinished { return .finished }
+        switch progress {
+        case 0.8...1.01: return .spherelike
+        case 0.6..<0.8:  return .roundedHeavy
+        case 0.4..<0.6:  return .roundedMedium
+        case 0.2..<0.4:  return .roundedLight
+        default:         return .cubelike
+        }
+    }
+
+    // size = 0.076 m, half = 0.038 m. All cornerRadius < 0.038 ✓
+    var cornerRadius: Float {
+        let h: Float = 0.038
+        switch self {
+        case .spherelike:    return h * 0.92    // 0.03496 — near sphere
+        case .roundedHeavy:  return h * 0.65    // 0.02470
+        case .roundedMedium: return h * 0.40    // 0.01520
+        case .roundedLight:  return h * 0.18    // 0.00684
+        case .cubelike:      return h * 0.04    // 0.00152
+        case .finished:      return h * 0.04
+        }
+    }
+
+    var uiColor: UIColor {
+        switch self {
+        case .spherelike:    return UIColor(red: 0.20, green: 0.55, blue: 1.00, alpha: 1)  // blue
+        case .roundedHeavy:  return UIColor(red: 0.10, green: 0.80, blue: 0.70, alpha: 1)  // teal
+        case .roundedMedium: return UIColor(red: 0.35, green: 0.80, blue: 0.30, alpha: 1)  // green
+        case .roundedLight:  return UIColor(red: 1.00, green: 0.55, blue: 0.10, alpha: 1)  // orange
+        case .cubelike:      return UIColor(red: 1.00, green: 0.18, blue: 0.10, alpha: 1)  // red
+        case .finished:      return UIColor(red: 0.50, green: 0.50, blue: 0.50, alpha: 1)  // gray
+        }
+    }
+}
+
+// MARK: - MorphingShapeView
+
+struct MorphingShapeView: View {
+    @ObservedObject var viewModel: TimerViewModel
+
+    private let CUSTOM_FONT = "Audiowide-Regular"
+    private let boxSize: Float = 0.076                 // metres
+    private let spinSpeedNormal: Double = 0.5          // rad/sec
+    private let spinSpeedUrgent: Double = 1.5
+
+    @State private var entity: ModelEntity? = nil
+    @State private var lastStage: MorphStage? = nil
+    @State private var spinAngle: Double = 0
+
+    private var isUrgent: Bool { viewModel.progress < 0.2 }
+    private var currentStage: MorphStage {
+        MorphStage.from(progress: viewModel.progress, hasFinished: viewModel.hasFinished)
+    }
+
+    var body: some View {
+        ZStack {
+            // ── RealityKit 3D entity ───────────────────────────────────────
+            TimelineView(.animation(paused: viewModel.timerState != .running)) { timeline in
+                let speed = isUrgent ? spinSpeedUrgent : spinSpeedNormal
+                let angle = timeline.date.timeIntervalSinceReferenceDate * speed
+
+                RealityView { content in
+                    let e = ModelEntity()
+                    e.name = "morphBox"
+                    applyStage(currentStage, to: e)
+                    content.add(e)
+                    Task { @MainActor in entity = e }
+                } update: { _ in
+                    guard let e = entity else { return }
+
+                    // Update mesh only on stage change
+                    let stage = currentStage
+                    if stage != lastStage {
+                        applyStage(stage, to: e)
+                        Task { @MainActor in lastStage = stage }
+                    }
+
+                    // Continuous Y-rotation driven by wall-clock angle
+                    e.orientation = simd_quatf(angle: Float(angle), axis: [0, 1, 0])
+
+                    // Scale: shrink slightly when paused / finished
+                    let targetScale: Float = viewModel.hasFinished ? 0.82
+                        : (viewModel.timerState == .paused ? 0.90 : 1.0)
+                    e.scale = SIMD3<Float>(repeating: targetScale)
+                }
+                .frame(width: 150, height: 150)
+            }
+
+            // ── Time label overlay ────────────────────────────────────────
+            Text(viewModel.timeFormatted)
+                .font(.custom(CUSTOM_FONT, size: 22))
+                .fontWeight(.bold)
+                .foregroundColor(viewModel.hasFinished ? .gray : .white)
+                // Push label below entity centre so it doesn't overlap
+                .offset(y: 52)
+        }
+        .frame(width: 150, height: 150)
+    }
+
+    // MARK: - Helpers
+
+    private func applyStage(_ stage: MorphStage, to entity: ModelEntity) {
+        guard let mesh = try? MeshResource.generateBox(
+            size: boxSize,
+            cornerRadius: stage.cornerRadius
+        ) else { return }
+
+        var mat = SimpleMaterial()
+        mat.color = .init(tint: stage.uiColor)
+        mat.roughness = MaterialScalarParameter(floatLiteral: 0.28)
+        mat.metallic  = MaterialScalarParameter(floatLiteral: 0.65)
+        entity.model = ModelComponent(mesh: mesh, materials: [mat])
+    }
+}
+
+// MARK: - MorphingTimerShape (2D fallback, retained for reference)
+
 private let k: CGFloat = 0.5522847498
 
 struct MorphingTimerShape: Shape {
-    var morphFactor: Double  // 0.0 = circle, 1.0 = rounded square
+    var morphFactor: Double
 
     var animatableData: Double {
         get { morphFactor }
@@ -17,257 +151,75 @@ struct MorphingTimerShape: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
-        let w = rect.width
-        let h = rect.height
-        let cx = rect.midX
-        let cy = rect.midY
-        let r = min(w, h) / 2           // circle radius
-        let cr = r * 0.28               // corner radius for rounded-square
+        let cx = rect.midX, cy = rect.midY
+        let r = min(rect.width, rect.height) / 2
+        let cr = r * 0.28
         let f = CGFloat(morphFactor)
 
-        // Helper: lerp between circle point and square point
-        func pt(_ circle: CGPoint, _ square: CGPoint) -> CGPoint {
-            CGPoint(
-                x: circle.x + (square.x - circle.x) * f,
-                y: circle.y + (square.y - circle.y) * f
-            )
+        func pt(_ c: CGPoint, _ s: CGPoint) -> CGPoint {
+            CGPoint(x: c.x + (s.x - c.x) * f, y: c.y + (s.y - c.y) * f)
         }
-
-        // Circle key points (4 cardinal anchors, k*r for control points)
-        // Square key points (edges at ±r, corners rounded by cr)
-        //
-        // We model the path as 4 cubic bezier segments (one per quadrant).
-        // Each segment goes from a cardinal point clockwise to the next.
-        // Starting from the top (12 o'clock), going clockwise.
-
-        // Anchor points on circle
-        let cTop    = CGPoint(x: cx,     y: cy - r)
-        let cRight  = CGPoint(x: cx + r, y: cy)
-        let cBottom = CGPoint(x: cx,     y: cy + r)
-        let cLeft   = CGPoint(x: cx - r, y: cy)
-
-        // Anchor points on rounded-square
-        // Top edge: from (-r+cr, -r) to (r-cr, -r)
-        // Right edge: from (r, -r+cr) to (r, r-cr)
-        // etc.
-        // We split each side at the midpoint to match the circle's cardinal anchor
-        let sTop    = CGPoint(x: cx,     y: cy - r)         // top center
-        let sRight  = CGPoint(x: cx + r, y: cy)             // right center
-        let sBottom = CGPoint(x: cx,     y: cy + r)         // bottom center
-        let sLeft   = CGPoint(x: cx - r, y: cy)             // left center
-
-        // Corner points (where arcs meet straight edges) on rounded-square
-        let sTR_topStart    = CGPoint(x: cx + r - cr, y: cy - r)        // top-right: top edge end
-        let sTR_rightStart  = CGPoint(x: cx + r,      y: cy - r + cr)   // top-right: right edge start
-        let sBR_rightEnd    = CGPoint(x: cx + r,      y: cy + r - cr)   // bottom-right: right edge end
-        let sBR_bottomStart = CGPoint(x: cx + r - cr, y: cy + r)        // bottom-right: bottom edge start
-        let sBL_bottomEnd   = CGPoint(x: cx - r + cr, y: cy + r)        // bottom-left: bottom edge end
-        let sBL_leftStart   = CGPoint(x: cx - r,      y: cy + r - cr)   // bottom-left: left edge start
-        let sTL_leftEnd     = CGPoint(x: cx - r,      y: cy - r + cr)   // top-left: left edge end
-        let sTL_topStart    = CGPoint(x: cx - r + cr, y: cy - r)        // top-left: top edge start
-
-        // Control points for circle (tangent handles)
-        // Top → Right segment
-        let cCP1_TR = CGPoint(x: cx + k*r, y: cy - r)
-        let cCP2_TR = CGPoint(x: cx + r,   y: cy - k*r)
-        // Right → Bottom segment
-        let cCP1_RB = CGPoint(x: cx + r,   y: cy + k*r)
-        let cCP2_RB = CGPoint(x: cx + k*r, y: cy + r)
-        // Bottom → Left segment
-        let cCP1_BL = CGPoint(x: cx - k*r, y: cy + r)
-        let cCP2_BL = CGPoint(x: cx - r,   y: cy + k*r)
-        // Left → Top segment
-        let cCP1_LT = CGPoint(x: cx - r,   y: cy - k*r)
-        let cCP2_LT = CGPoint(x: cx - k*r, y: cy - r)
-
-        // Control points for rounded-square corners (Bezier arc approx, radius=cr)
-        // Top-right corner: from sTR_topStart to sTR_rightStart
-        let sCP1_TR = CGPoint(x: cx + r,       y: cy - r)
-        let sCP2_TR = CGPoint(x: cx + r,       y: cy - r)
-        // We need control points at the corner tangent
-        // For a 90° bezier arc of radius cr centered at (cx+r-cr, cy-r+cr):
-        let trCenter = CGPoint(x: cx + r - cr, y: cy - r + cr)
-        let sCP1_TRarc = CGPoint(x: trCenter.x + cr,       y: trCenter.y - cr)        // = (cx+r, cy-r)... simplified
-        let sCP2_TRarc = CGPoint(x: trCenter.x + cr,       y: trCenter.y - cr)
-
-        // For cleaner code, compute rounded rect as two halves per quadrant:
-        // Half 1 (straight to corner start): straight line → use same point for both CPs
-        // Half 2 (corner arc): use the k*cr tangent offset
 
         let kc = k * cr
-
-        // Top-right corner center
         let trC = CGPoint(x: cx + r - cr, y: cy - r + cr)
-        // Bottom-right corner center
         let brC = CGPoint(x: cx + r - cr, y: cy + r - cr)
-        // Bottom-left corner center
         let blC = CGPoint(x: cx - r + cr, y: cy + r - cr)
-        // Top-left corner center
         let tlC = CGPoint(x: cx - r + cr, y: cy - r + cr)
 
-        var path = Path()
+        let cTop   = CGPoint(x: cx,     y: cy - r)
+        let cRight = CGPoint(x: cx + r, y: cy)
+        let cBot   = CGPoint(x: cx,     y: cy + r)
+        let cLeft  = CGPoint(x: cx - r, y: cy)
 
-        // Start at top center
-        path.move(to: pt(cTop, sTop))
+        let sTRts = CGPoint(x: cx + r - cr, y: cy - r)
+        let sBRre = CGPoint(x: cx + r,      y: cy + r - cr)
+        let sBLbe = CGPoint(x: cx - r + cr, y: cy + r)
+        let sTLle = CGPoint(x: cx - r,      y: cy - r + cr)
 
-        // Segment 1: Top → Right (top-right quadrant)
-        // Circle: single cubic from cTop to cRight
-        // Square: straight from sTop to sTR_topStart, then bezier corner to sTR_rightStart, straight to sRight
-        // We approximate as two cubics blended together:
-        //   Sub-seg A: top-center → top-right corner start
-        //   Sub-seg B: top-right corner arc → right-center
+        var p = Path()
+        p.move(to: pt(cTop, CGPoint(x: cx, y: cy - r)))
 
-        // Sub-seg A: sTop → sTR_topStart (straight on square, arc on circle)
-        path.addCurve(
-            to: pt(
-                CGPoint(x: cx + r * 0.707, y: cy - r * 0.707),  // circle: 45° point
-                sTR_topStart
-            ),
-            control1: pt(
-                CGPoint(x: cx + k*r * 0.5, y: cy - r),          // circle CP1
-                sTop                                              // square: stay on top edge
-            ),
-            control2: pt(
-                CGPoint(x: cx + r, y: cy - k*r * 0.5),          // circle CP2
-                sTR_topStart                                      // square: arrive at corner
-            )
+        p.addCurve(
+            to: pt(CGPoint(x: cx + r * 0.707, y: cy - r * 0.707), sTRts),
+            control1: pt(CGPoint(x: cx + k*r*0.5, y: cy - r), CGPoint(x: cx, y: cy - r)),
+            control2: pt(CGPoint(x: cx + r, y: cy - k*r*0.5), sTRts)
         )
-
-        // Sub-seg B: corner arc → right-center
-        path.addCurve(
-            to: pt(cRight, sRight),
-            control1: pt(
-                CGPoint(x: cx + r,   y: cy - k*r * 0.5),
-                CGPoint(x: trC.x + cr, y: trC.y - kc)           // square: corner arc CP1
-            ),
-            control2: pt(
-                CGPoint(x: cx + k*r * 0.5, y: cy),
-                CGPoint(x: trC.x + kc, y: trC.y - cr)           // square: corner arc CP2
-            )
+        p.addCurve(
+            to: pt(cRight, CGPoint(x: cx + r, y: cy)),
+            control1: pt(CGPoint(x: cx + r, y: cy - k*r*0.5), CGPoint(x: trC.x + cr, y: trC.y - kc)),
+            control2: pt(CGPoint(x: cx + k*r*0.5, y: cy), CGPoint(x: trC.x + kc, y: trC.y - cr))
         )
-
-        // Segment 2: Right → Bottom (bottom-right quadrant)
-        path.addCurve(
-            to: pt(
-                CGPoint(x: cx + r * 0.707, y: cy + r * 0.707),
-                sBR_rightEnd
-            ),
-            control1: pt(
-                CGPoint(x: cx + r, y: cy + k*r * 0.5),
-                sRight
-            ),
-            control2: pt(
-                CGPoint(x: cx + r * 0.5, y: cy + r),
-                sBR_rightEnd
-            )
+        p.addCurve(
+            to: pt(CGPoint(x: cx + r*0.707, y: cy + r*0.707), sBRre),
+            control1: pt(CGPoint(x: cx + r, y: cy + k*r*0.5), CGPoint(x: cx + r, y: cy)),
+            control2: pt(CGPoint(x: cx + r*0.5, y: cy + r), sBRre)
         )
-
-        path.addCurve(
-            to: pt(cBottom, sBottom),
-            control1: pt(
-                CGPoint(x: cx + r * 0.5, y: cy + r),
-                CGPoint(x: brC.x + cr, y: brC.y + kc)
-            ),
-            control2: pt(
-                CGPoint(x: cx + k*r * 0.5, y: cy + r),
-                CGPoint(x: brC.x + kc, y: brC.y + cr)
-            )
+        p.addCurve(
+            to: pt(cBot, CGPoint(x: cx, y: cy + r)),
+            control1: pt(CGPoint(x: cx + r*0.5, y: cy + r), CGPoint(x: brC.x + cr, y: brC.y + kc)),
+            control2: pt(CGPoint(x: cx + k*r*0.5, y: cy + r), CGPoint(x: brC.x + kc, y: brC.y + cr))
         )
-
-        // Segment 3: Bottom → Left (bottom-left quadrant)
-        path.addCurve(
-            to: pt(
-                CGPoint(x: cx - r * 0.707, y: cy + r * 0.707),
-                sBL_bottomEnd
-            ),
-            control1: pt(
-                CGPoint(x: cx - k*r * 0.5, y: cy + r),
-                sBottom
-            ),
-            control2: pt(
-                CGPoint(x: cx - r, y: cy + k*r * 0.5),
-                sBL_bottomEnd
-            )
+        p.addCurve(
+            to: pt(CGPoint(x: cx - r*0.707, y: cy + r*0.707), sBLbe),
+            control1: pt(CGPoint(x: cx - k*r*0.5, y: cy + r), CGPoint(x: cx, y: cy + r)),
+            control2: pt(CGPoint(x: cx - r, y: cy + k*r*0.5), sBLbe)
         )
-
-        path.addCurve(
-            to: pt(cLeft, sLeft),
-            control1: pt(
-                CGPoint(x: cx - r, y: cy + k*r * 0.5),
-                CGPoint(x: blC.x - kc, y: blC.y + cr)
-            ),
-            control2: pt(
-                CGPoint(x: cx - r, y: cy - k*r * 0.5),
-                CGPoint(x: blC.x - cr, y: blC.y + kc)
-            )
+        p.addCurve(
+            to: pt(cLeft, CGPoint(x: cx - r, y: cy)),
+            control1: pt(CGPoint(x: cx - r, y: cy + k*r*0.5), CGPoint(x: blC.x - kc, y: blC.y + cr)),
+            control2: pt(CGPoint(x: cx - r, y: cy - k*r*0.5), CGPoint(x: blC.x - cr, y: blC.y + kc))
         )
-
-        // Segment 4: Left → Top (top-left quadrant)
-        path.addCurve(
-            to: pt(
-                CGPoint(x: cx - r * 0.707, y: cy - r * 0.707),
-                sTL_leftEnd
-            ),
-            control1: pt(
-                CGPoint(x: cx - r, y: cy - k*r * 0.5),
-                sLeft
-            ),
-            control2: pt(
-                CGPoint(x: cx - r * 0.5, y: cy - r),
-                sTL_leftEnd
-            )
+        p.addCurve(
+            to: pt(CGPoint(x: cx - r*0.707, y: cy - r*0.707), sTLle),
+            control1: pt(CGPoint(x: cx - r, y: cy - k*r*0.5), CGPoint(x: cx - r, y: cy)),
+            control2: pt(CGPoint(x: cx - r*0.5, y: cy - r), sTLle)
         )
-
-        path.addCurve(
-            to: pt(cTop, sTop),
-            control1: pt(
-                CGPoint(x: cx - r * 0.5, y: cy - r),
-                CGPoint(x: tlC.x - kc, y: tlC.y - cr)
-            ),
-            control2: pt(
-                CGPoint(x: cx - k*r * 0.5, y: cy - r),
-                CGPoint(x: tlC.x - cr, y: tlC.y - kc)
-            )
+        p.addCurve(
+            to: pt(cTop, CGPoint(x: cx, y: cy - r)),
+            control1: pt(CGPoint(x: cx - r*0.5, y: cy - r), CGPoint(x: tlC.x - kc, y: tlC.y - cr)),
+            control2: pt(CGPoint(x: cx - k*r*0.5, y: cy - r), CGPoint(x: tlC.x - cr, y: tlC.y - kc))
         )
-
-        path.closeSubpath()
-        return path
-    }
-}
-
-struct MorphingShapeView: View {
-    @ObservedObject var viewModel: TimerViewModel
-
-    private let CUSTOM_FONT = "Audiowide-Regular"
-
-    private var morphFactor: Double {
-        viewModel.hasFinished ? 1.0 : (1.0 - viewModel.progress)
-    }
-
-    private var shapeColor: Color {
-        viewModel.hasFinished ? .gray : .purple
-    }
-
-    var body: some View {
-        ZStack {
-            MorphingTimerShape(morphFactor: morphFactor)
-                .fill(shapeColor.opacity(0.15))
-                .animation(.linear, value: viewModel.progress)
-
-            MorphingTimerShape(morphFactor: morphFactor)
-                .stroke(
-                    shapeColor,
-                    style: StrokeStyle(lineWidth: 14, lineCap: .round, lineJoin: .round)
-                )
-                .animation(.linear, value: viewModel.progress)
-
-            Text(viewModel.timeFormatted)
-                .font(.custom(CUSTOM_FONT, size: 22))
-                .fontWeight(.bold)
-                .foregroundColor(viewModel.hasFinished ? .gray : .white)
-                .scaleEffect(1.0 - (1.0 - viewModel.progress) * 0.15)
-                .animation(.linear, value: viewModel.progress)
-        }
-        .frame(width: 150, height: 150)
+        p.closeSubpath()
+        return p
     }
 }
