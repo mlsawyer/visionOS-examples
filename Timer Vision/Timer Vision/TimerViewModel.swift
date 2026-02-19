@@ -13,6 +13,7 @@ class TimerViewModel: ObservableObject {
     enum TimerState {
         case finished
         case running
+        case paused
         case stopped
     }
     
@@ -40,10 +41,39 @@ class TimerViewModel: ObservableObject {
         timeRemaining = duration
         timerState = .running
         hasFinished = false
-        
+        scheduleTimer()
+    }
+
+    func pauseTimer() {
+        timer?.invalidate()
+        timer = nil
+        timerState = .paused
+    }
+
+    func resumeTimer() {
+        timerState = .running
+        scheduleTimer()
+    }
+
+    func cancelTimer() {
+        timer?.invalidate()
+        timer = nil
+        player?.stop()
+        timeRemaining = 0
+        initialTime = 0
+        hasFinished = false
+        timerState = .stopped
+    }
+
+    func stopSound() {
+        player?.stop()
+        timerState = .stopped
+    }
+
+    private func scheduleTimer() {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self = self else { return }
-            
+
             if self.timeRemaining > 0 {
                 self.timeRemaining -= 1
             } else {
@@ -53,11 +83,6 @@ class TimerViewModel: ObservableObject {
                 self.timer?.invalidate()
             }
         }
-    }
-    
-    func stopSound() {
-        player?.stop()
-        timerState = .stopped
     }
     
     private func playSound() {

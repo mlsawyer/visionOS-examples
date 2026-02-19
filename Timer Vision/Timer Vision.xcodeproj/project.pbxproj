@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		27459B422F46E47D00FA4958 /* PulsingGlowRingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27459B402F46E47D00FA4958 /* PulsingGlowRingView.swift */; };
+		27459B432F46E47D00FA4958 /* SegmentedArcSparkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27459B412F46E47D00FA4958 /* SegmentedArcSparkView.swift */; };
+		27459B452F46E4B800FA4958 /* MorphingShapeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27459B442F46E4B800FA4958 /* MorphingShapeView.swift */; };
 		3B025D6D2BC90A8B00E96EFE /* VirtualityHustle.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 3B025D6C2BC90A8B00E96EFE /* VirtualityHustle.mp3 */; };
 		3B025D712BC9109F00E96EFE /* Audiowide-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3B025D702BC9109F00E96EFE /* Audiowide-Regular.ttf */; };
 		3B8EF71D2B747C9E00EB3308 /* RealityKitContent in Frameworks */ = {isa = PBXBuildFile; productRef = 3B8EF71C2B747C9E00EB3308 /* RealityKitContent */; };
@@ -18,6 +21,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		27459B402F46E47D00FA4958 /* PulsingGlowRingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulsingGlowRingView.swift; sourceTree = "<group>"; };
+		27459B412F46E47D00FA4958 /* SegmentedArcSparkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentedArcSparkView.swift; sourceTree = "<group>"; };
+		27459B442F46E4B800FA4958 /* MorphingShapeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MorphingShapeView.swift; sourceTree = "<group>"; };
 		3B025D6C2BC90A8B00E96EFE /* VirtualityHustle.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = VirtualityHustle.mp3; sourceTree = "<group>"; };
 		3B025D702BC9109F00E96EFE /* Audiowide-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Audiowide-Regular.ttf"; sourceTree = "<group>"; };
 		3B8EF7172B747C9E00EB3308 /* Timer Vision.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Timer Vision.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -64,12 +70,15 @@
 		3B8EF7192B747C9E00EB3308 /* Timer Vision */ = {
 			isa = PBXGroup;
 			children = (
+				27459B442F46E4B800FA4958 /* MorphingShapeView.swift */,
 				3B8EF71E2B747C9E00EB3308 /* Timer_VisionApp.swift */,
 				3B8EF7202B747C9E00EB3308 /* ContentView.swift */,
 				3B8EF72D2B747CDE00EB3308 /* TimerViewModel.swift */,
 				3B8EF7222B747C9F00EB3308 /* Assets.xcassets */,
 				3B8EF7272B747C9F00EB3308 /* Info.plist */,
 				3B8EF7242B747C9F00EB3308 /* Preview Content */,
+				27459B402F46E47D00FA4958 /* PulsingGlowRingView.swift */,
+				27459B412F46E47D00FA4958 /* SegmentedArcSparkView.swift */,
 			);
 			path = "Timer Vision";
 			sourceTree = "<group>";
@@ -167,6 +176,9 @@
 			files = (
 				3B8EF7212B747C9E00EB3308 /* ContentView.swift in Sources */,
 				3B8EF72E2B747CDE00EB3308 /* TimerViewModel.swift in Sources */,
+				27459B422F46E47D00FA4958 /* PulsingGlowRingView.swift in Sources */,
+				27459B432F46E47D00FA4958 /* SegmentedArcSparkView.swift in Sources */,
+				27459B452F46E4B800FA4958 /* MorphingShapeView.swift in Sources */,
 				3B8EF71F2B747C9E00EB3308 /* Timer_VisionApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

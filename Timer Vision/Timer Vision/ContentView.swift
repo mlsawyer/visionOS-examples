@@ -32,7 +32,7 @@ struct ContentView: View {
                         .frame(width: 200)
                         .padding()
                     
-                    Button("Start biggest Timer") {
+                    Button("Start Timer") {
                         if let seconds = Int(inputSeconds) {
                             timerViewModel.startTimer(duration: seconds)
                         }
@@ -42,28 +42,55 @@ struct ContentView: View {
                     .background(Color.blue)
                     .clipShape(Capsule())
                 } else {
-                    ZStack {
-                        Circle()
-                            .stroke(lineWidth: 20)
-                            .opacity(1.0)
-                            .foregroundColor(Color.gray)
-                        
-                        Circle()
-                            .trim(from: 0, to: CGFloat(timerViewModel.progress))
-                            .stroke(style: StrokeStyle(lineWidth: 20, lineCap: .round, lineJoin: .round))
-                            .foregroundColor(timerViewModel.hasFinished ? .gray : .green)
-                            .rotationEffect(Angle(degrees: -90))
-                            .animation(.linear, value: timerViewModel.progress)
-                        
-                        // Place the time-formatted text in the center of the circle
-                        Text(timerViewModel.timeFormatted)
-                            .font(.custom(CUSTOM_FONT, size: 42))
-                            .fontWeight(.bold)
-                            .foregroundColor(timerViewModel.hasFinished ? .gray : .white)
+                    HStack(alignment: .top, spacing: 24) {
+                        VStack(spacing: 8) {
+                            PulsingGlowRingView(viewModel: timerViewModel)
+                            Text("Glow Ring")
+                                .font(.custom(CUSTOM_FONT, size: 12))
+                                .foregroundColor(.secondary)
+                        }
+
+                        VStack(spacing: 8) {
+                            SegmentedArcSparkView(viewModel: timerViewModel)
+                            Text("Arc Spark")
+                                .font(.custom(CUSTOM_FONT, size: 12))
+                                .foregroundColor(.secondary)
+                        }
+
+                        VStack(spacing: 8) {
+                            MorphingShapeView(viewModel: timerViewModel)
+                            Text("Morph")
+                                .font(.custom(CUSTOM_FONT, size: 12))
+                                .foregroundColor(.secondary)
+                        }
                     }
-                    .frame(width: 200, height: 200)
+                    .padding(.horizontal, 16)
                 }
                 
+                if timerViewModel.timerState == .running || timerViewModel.timerState == .paused {
+                    HStack(spacing: 16) {
+                        Button(timerViewModel.timerState == .running ? "Pause" : "Resume") {
+                            if timerViewModel.timerState == .running {
+                                timerViewModel.pauseTimer()
+                            } else {
+                                timerViewModel.resumeTimer()
+                            }
+                        }
+                        .padding()
+                        .foregroundColor(.white)
+                        .background(Color.orange)
+                        .clipShape(Capsule())
+
+                        Button("Cancel") {
+                            timerViewModel.cancelTimer()
+                        }
+                        .padding()
+                        .foregroundColor(.white)
+                        .background(Color.red)
+                        .clipShape(Capsule())
+                    }
+                }
+
                 if timerViewModel.hasFinished {
                     Button("Stop Sound") {
                         timerViewModel.stopSound()
