@@ -20,7 +20,7 @@ struct ContentView: View {
             
             VStack(spacing: 20) {
                 if timerViewModel.timerState == .stopped {
-                    TextField("Sec", text: $inputSeconds)
+                    TextField("Second", text: $inputSeconds)
                         .padding()
                         .foregroundColor(Color.blue)
                         .background(Color.white)
